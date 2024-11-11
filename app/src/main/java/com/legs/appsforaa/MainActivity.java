@@ -106,9 +106,11 @@ public class MainActivity extends AppCompatActivity  {
 
         deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
 
+        /*
         FirebaseDatabase database = FirebaseDatabase.getInstance(BuildConfig.FIREBASE_INSTANCE);
         final DatabaseReference myRef = database.getReference("users");
         mySecondRef = database.getReference("lastdownload");
+        */
 
         final ProgressBar pb = findViewById(R.id.loading_circle);
         final TextView connecting = findViewById(R.id.connecting);
@@ -116,6 +118,17 @@ public class MainActivity extends AppCompatActivity  {
         Intent intent = getIntent();
         final Uri iData = intent.getData();
 
+        //Simulate Pro Version
+        remainingDownloads.setText(R.string.congratsPro);
+        pb.setVisibility(View.GONE);
+        connecting.setVisibility(View.GONE);
+        verified[0] = true;
+        eligible = true;
+        if (iData != null) {
+            downloadS2A(iData.toString());
+        }
+
+        /*
         //BEGIN THE CHECK FOR LICENSE AND LAST DOWNLOAD
         myRef.child(deviceId).addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
@@ -301,6 +314,7 @@ public class MainActivity extends AppCompatActivity  {
                 shakeButton();
             }
         });
+         */
 
         //BUTTONS
 

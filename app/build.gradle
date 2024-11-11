@@ -1,10 +1,10 @@
 plugins {
     id 'com.android.application'
     id 'kotlin-android'
-    id 'kotlin-android-extensions'
-    id 'com.google.gms.google-services'
+    //id 'kotlin-android-extensions'
+    //id 'com.google.gms.google-services'
 }
-
+/*
 allprojects {
     repositories {
         maven {
@@ -13,8 +13,10 @@ allprojects {
         mavenCentral()
     }
 }
+*/
 
 android {
+    namespace 'com.legs.appsforaa'
 
     packagingOptions {
         exclude 'META-INF/DEPENDENCIES'
@@ -43,13 +45,9 @@ android {
             keyPassword localProperties['KEYPASSWORD']
         }
     }
+    compileSdk 34
 
-
-
-
-
-    compileSdkVersion 30
-    buildToolsVersion "30.0.3"
+    buildToolsVersion '34.0.0'
 
     defaultConfig {
 
@@ -57,7 +55,8 @@ android {
 
         applicationId "sksa.aa.customapps"
         minSdkVersion 23
-        targetSdkVersion 30
+        targetSdk 34
+        //noinspection ExpiredTargetSdkVersion
         versionCode 7
         versionName "1.4"
         signingConfig signingConfigs.'nuova'
@@ -77,6 +76,7 @@ android {
         buildConfigField "String", "AAWIDGETS_LINK", localProperties['AAWIDGETS_LINK']
         buildConfigField "String", "AASTREAM_LINK", localProperties['AASTREAM_LINK']
 
+        android.buildFeatures.buildConfig true
     }
 
     buildTypes {
@@ -84,6 +84,10 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+    compileOptions {
+        targetCompatibility JavaVersion.VERSION_21
+        sourceCompatibility JavaVersion.VERSION_21
     }
 }
 
