@@ -1,6 +1,8 @@
 package com.legs.appsforaa;
 
 import android.Manifest;
+
+import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
@@ -99,7 +101,8 @@ public class MainActivity extends AppCompatActivity  {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        requestLatest();
+        // Disable request latest
+        // requestLatest();
 
         remainingDownloads = findViewById(R.id.remaining_downloads);
         verified = new Boolean[1];
@@ -345,9 +348,7 @@ public class MainActivity extends AppCompatActivity  {
             public void onClick(View v) {
 
                 if (eligible) {
-                    if (ContextCompat.checkSelfPermission(MainActivity.this,
-                            Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                            != PackageManager.PERMISSION_GRANTED ) {
+                    if (!hasStoragePermission()) {
                         askForStoragePermission();
                     } else {
 
@@ -773,6 +774,16 @@ public class MainActivity extends AppCompatActivity  {
 
     }
 
+    private boolean hasStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            return true; // Retorna true para Android 10 ou superior
+        } else {
+        return ContextCompat.checkSelfPermission(MainActivity.this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED;
+        }
+    }
+
     private void askForStoragePermission() {
             ActivityCompat.requestPermissions(MainActivity.this,
                     new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
@@ -885,7 +896,7 @@ public class MainActivity extends AppCompatActivity  {
 
         final ArrayList<String> downloadURLS = new ArrayList<String>();
 
-        String baseUrl = "https://api.github.com/repos/AndreyPavlenko/Fermata/releases/latest";
+        String baseUrl = "https://api.github.com/repos/alexsandroz/Fermata/releases/latest";
 
         RequestQueue queue = Volley.newRequestQueue(this.getApplicationContext());
 
@@ -1585,6 +1596,7 @@ public class MainActivity extends AppCompatActivity  {
 
                     private String fetchedVersion;
 
+                    @SuppressLint("StringFormatInvalid")
                     @Override
                     public void onResponse(JSONObject response) {
                         try {
