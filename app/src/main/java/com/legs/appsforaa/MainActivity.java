@@ -351,59 +351,86 @@ public class MainActivity extends AppCompatActivity  {
                     if (!hasStoragePermission()) {
                         askForStoragePermission();
                     } else {
+                        final String[] baseUrl = new String[1];
+                        baseUrl[0] = "";
 
-                        String baseUrl = "https://api.github.com/repos/AndreyPavlenko/Fermata/releases/latest";
+                        AlertDialog.Builder adb = new AlertDialog.Builder(MainActivity.this);
+                        CharSequence[] items = new CharSequence[]{"Fermata by AndreyPavlenko", "Fermata by Alexsandroz"};
+                        adb.setSingleChoiceItems(items, 4, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface d, int n) {
+                                switch (n) {
+                                    case 0:
+                                        baseUrl[0] = "https://api.github.com/repos/AndreyPavlenko/Fermata/releases/latest";
+                                        break;
+                                    case 1:
+                                        baseUrl[0] = "https://api.github.com/repos/alexsandroz/Fermata/releases/latest";
+                                        break;
+                                    default:
+                                        throw new IllegalStateException("Unexpected value: " + n);
+                                }
+                            }
 
-                        RequestQueue queue = Volley.newRequestQueue(getApplicationContext());
-                        final AlertDialog alertDialog = new AlertDialog.Builder(MainActivity.this).create();
+                        });
 
+                        adb.setPositiveButton(getString(android.R.string.ok), new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                RequestQueue queue = Volley.newRequestQueue(getApplicationContext());
+                                final AlertDialog alertDialog = new AlertDialog.Builder(MainActivity.this).create();
+                                final JsonObjectRequest jsonObjectRequest = new JsonObjectRequest
+                                        (Request.Method.GET, baseUrl[0], null, new Response.Listener<JSONObject>() {
+                                            @Override
+                                            public void onResponse(JSONObject response) {
+                                                try {
 
-                        final JsonObjectRequest jsonObjectRequest = new JsonObjectRequest
-                                (Request.Method.GET, baseUrl, null, new Response.Listener<JSONObject>() {
-                                    @Override
-                                    public void onResponse(JSONObject response) {
-                                        try {
+                                                    alertDialog.setMessage(getString(R.string.fermata_control_dialog, "Fermata Auto", response.getString("name"), "Fermata Control"));
 
-                                            alertDialog.setMessage(getString(R.string.fermata_control_dialog, "Fermata Auto", response.getString("name"), "Fermata Control"));
+                                                } catch (JSONException e) {
+                                                    e.printStackTrace();
+                                                } finally {
 
-                                        } catch (JSONException e) {
-                                            e.printStackTrace();
-                                        } finally {
+                                                    alertDialog.setButton(AlertDialog.BUTTON_POSITIVE, getString(android.R.string.ok), new DialogInterface.OnClickListener() {
+                                                        public void onClick(DialogInterface dialog, int which) {
+                                                            downloadFermata(true, baseUrl[0]);
+                                                            alertDialog.dismiss();
+                                                        }
+                                                    });
 
-                                            alertDialog.setButton(AlertDialog.BUTTON_POSITIVE, getString(android.R.string.ok), new DialogInterface.OnClickListener() {
-                                                public void onClick(DialogInterface dialog, int which) {
-                                                    downloadFermata(true);
-                                                    alertDialog.dismiss();
+                                                    alertDialog.setButton(AlertDialog.BUTTON_NEGATIVE, getString(R.string.no), new DialogInterface.OnClickListener() {
+                                                        public void onClick(DialogInterface dialog, int which) {
+                                                            downloadFermata(false, baseUrl[0]);
+                                                            alertDialog.dismiss();
+                                                        }
+                                                    });
+
+                                                    alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, getString(android.R.string.cancel), new DialogInterface.OnClickListener() {
+                                                        public void onClick(DialogInterface dialog, int which) {
+                                                            alertDialog.dismiss();
+                                                        }
+                                                    });
+                                                    alertDialog.show();
                                                 }
-                                            });
 
-                                            alertDialog.setButton(AlertDialog.BUTTON_NEGATIVE, getString(R.string.no), new DialogInterface.OnClickListener() {
-                                                public void onClick(DialogInterface dialog, int which) {
-                                                    downloadFermata(false);
-                                                    alertDialog.dismiss();
-                                                }
-                                            });
-
-                                            alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, getString(android.R.string.cancel), new DialogInterface.OnClickListener() {
-                                                public void onClick(DialogInterface dialog, int which) {
-                                                    alertDialog.dismiss();
-                                                }
-                                            });
-                                            alertDialog.show();
-                                        }
-
-                                    }
-                                }, new Response.ErrorListener() {
+                                            }
+                                        }, new Response.ErrorListener() {
 
 
-                                    @Override
-                                    public void onErrorResponse(VolleyError error) {
+                                            @Override
+                                            public void onErrorResponse(VolleyError error) {
 
-                                    }
-                                });
+                                            }
+                                        });
 
 
-                        queue.add(jsonObjectRequest);
+                                queue.add(jsonObjectRequest);
+
+                            }
+                        });
+                        adb.setNegativeButton(getString(android.R.string.cancel), null);
+                        adb.setTitle(R.string.select_which);
+                        adb.show();
+
                     }
                 } else {
                     shakeButton();
@@ -892,14 +919,11 @@ public class MainActivity extends AppCompatActivity  {
     }
 
 
-    public void downloadFermata (final boolean control) {
+    public void downloadFermata (final boolean control, final String baseUrl) {
 
         final ArrayList<String> downloadURLS = new ArrayList<String>();
 
-        String baseUrl = "https://api.github.com/repos/alexsandroz/Fermata/releases/latest";
-
         RequestQueue queue = Volley.newRequestQueue(this.getApplicationContext());
-
 
         final JsonObjectRequest jsonObjectRequest = new JsonObjectRequest
                 (Request.Method.GET, baseUrl, null, new Response.Listener<JSONObject>() {
