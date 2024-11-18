@@ -4,10 +4,15 @@ import android.Manifest;
 
 import android.annotation.SuppressLint;
 import android.app.Dialog;
+import android.app.PendingIntent;
 import android.app.ProgressDialog;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -15,8 +20,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.StrictMode;
 import android.provider.Settings;
-import android.text.SpannableString;
-import android.text.style.UnderlineSpan;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -60,8 +63,14 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -799,6 +808,12 @@ public class MainActivity extends AppCompatActivity  {
         }
 
 
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(ACTION_INSTALL_COMPLETE);
+        BroadcastReceiver mIntentReceiver = new MyBroadcastReceiver();
+        if (Build.VERSION.SDK_INT >= 26) {
+            registerReceiver(mIntentReceiver, intentFilter,Context.RECEIVER_EXPORTED);
+        }
     }
 
     private boolean hasStoragePermission() {
@@ -1494,6 +1509,44 @@ public class MainActivity extends AppCompatActivity  {
 
     }
 
+    private static final String ACTION_INSTALL_COMPLETE =
+            "com.legs.appsforaa.INSTALL_COMPLETE";
+
+    public static class MyBroadcastReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+
+            if (ACTION_INSTALL_COMPLETE.equals(action)) {
+                int result = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
+                String message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+                switch (result) {
+                    case PackageInstaller.STATUS_PENDING_USER_ACTION: {
+                        // this should not happen in M, but will happen in L and L-MR1
+                        context.startActivity((Intent) intent.getParcelableExtra(Intent.EXTRA_INTENT));
+                    }
+                    break;
+                    case PackageInstaller.STATUS_SUCCESS:
+                        Toast.makeText(context, "Install succeeded!", Toast.LENGTH_SHORT).show();
+                        break;
+                    case PackageInstaller.STATUS_FAILURE:
+                    case PackageInstaller.STATUS_FAILURE_ABORTED:
+                    case PackageInstaller.STATUS_FAILURE_BLOCKED:
+                    case PackageInstaller.STATUS_FAILURE_CONFLICT:
+                    case PackageInstaller.STATUS_FAILURE_INCOMPATIBLE:
+                    case PackageInstaller.STATUS_FAILURE_INVALID:
+                    case PackageInstaller.STATUS_FAILURE_STORAGE:
+                    default:
+                        new AlertDialog.Builder(context)
+                                .setTitle("Install error")
+                                .setMessage(result + ": " + message)
+                                .setPositiveButton(context.getString(android.R.string.ok), (dialog, which) -> dialog.dismiss())
+                                .create()
+                                .show();
+                }
+            }
+        }
+    }
 
     void installAPK(File file) {
 
@@ -1502,30 +1555,112 @@ public class MainActivity extends AppCompatActivity  {
         }
         dismissProgressDialog(pDialog);
 
-            Intent intent;
+        Intent intent;
 
+        if (Build.VERSION.SDK_INT >= 33) {
+            installByPackageInstaller(file);
+            //installByShellScriptPm(file);
+        } else {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-                intent.setData(getUri(file));
-                intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                installByPackageInstaller(file);
+//                intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+//                intent.setData(getUri(file));
+//                intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
             } else {
                 intent = new Intent(Intent.ACTION_VIEW);
                 intent.setDataAndTypeAndNormalize(Uri.fromFile(file), "application/vnd.android.package-archive");
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             }
 
-            intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-            intent.putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, "com.android.vending");
-            getApplicationContext().startActivity(intent);
+//            intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+//            intent.putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, "com.android.vending");
+//            getApplicationContext().startActivity(intent);
         }
 
+    }
+
+    private void installByShellScriptPm(File file) {
+        Context context = MainActivity.this;
+        try {
+            List<String> ret = runShellCommand("pm install -i \"com.android.vending\" " + file.getPath());
+            Toast.makeText(this, ret.toString(), Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            new AlertDialog.Builder(context)
+                    .setTitle("Install error")
+                    .setMessage(e.getLocalizedMessage())
+                    .setPositiveButton(getString(android.R.string.ok), (dialog, which) -> dialog.dismiss())
+                    .create()
+                    .show();
+        }
+    }
+
+    private void installByPackageInstaller(File file) {
+        Intent intent;
+        PackageInstaller.Session session = null;
+        Context context = MainActivity.this;
+        try {
+
+//            if(!Settings.System.canWrite(this)){
+//                intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
+//                intent.setData(Uri.parse("package:" + this.getPackageName()));
+//                startActivity(intent);
+//                return;
+//            }
+
+            int flags = 0;
+            PackageInstaller packageInstaller = context.getPackageManager().getPackageInstaller();
+            PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
+                    PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            if (Build.VERSION.SDK_INT >= 34) {
+                flags = PendingIntent.FLAG_MUTABLE
+                        | PendingIntent.FLAG_CANCEL_CURRENT
+                        | PendingIntent.FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT;
+                //params.setAppPackageName("me.aap.fermata.auto.dear.google.why");
+                params.setInstallReason(PackageManager.INSTALL_REASON_USER);
+                params.setPackageSource(PackageInstaller.PACKAGE_SOURCE_STORE);
+                params.setOriginatingUid(10186); //buscar uid of com.android.vending
+                params.setOriginatingUri(Uri.parse("https://play.google.com/store/apps/details?id=com.android.vending"));
+//                params.setInstallerPackageName("com.android.vending");
+
+            } else {
+                flags = PendingIntent.FLAG_MUTABLE;
+            }
+            int sessionId = packageInstaller.createSession(params);
+            session = packageInstaller.openSession(sessionId);
+            //getPackageManager().setInstallerPackageName("me.aap.fermata.auto.dear.google.why","com.android.vending");
+            //getPackageManager().getInstalledPackages(0x00400000)
+            InputStream in = new FileInputStream(file);
+            OutputStream out = session.openWrite("package", 0, -1);
+            byte[] buffer = new byte[65536];
+            int c;
+            while ((c = in.read(buffer)) != -1) {
+                out.write(buffer, 0, c);
+            }
+            session.fsync(out);
+            in.close();
+            out.close();
+
+            intent = new Intent(ACTION_INSTALL_COMPLETE);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(context, sessionId, intent, flags);
+            session.commit(pendingIntent.getIntentSender());
+        } catch (Exception e) {
+            new AlertDialog.Builder(context)
+                    .setTitle("Install error")
+                    .setMessage(e.getLocalizedMessage())
+                    .setPositiveButton(getString(android.R.string.ok), (dialog, which) -> dialog.dismiss())
+                    .create()
+            .show();
+            if (session != null) {
+                session.abandon();
+            }
+        }
+    }
 
 
     private void dismissProgressDialog(ProgressDialog pDialog) {
-
-        pDialog.dismiss();
-
-
+        if (pDialog != null && pDialog.isShowing()) {
+            pDialog.dismiss();
+        }
     }
 
     public Uri getUri(File file) {
@@ -1689,4 +1824,64 @@ public class MainActivity extends AppCompatActivity  {
 
     }
 
+    public static List<String> runShellCommand(String command) {
+        List<String> results = new ArrayList<String>();
+        int status = -1;
+        if (command == null || command.isEmpty()) {
+            return null;
+        }
+        Process process = null;
+        BufferedReader successReader = null;
+        BufferedReader errorReader = null;
+        StringBuilder errorMsg = null;
+
+        DataOutputStream dos = null;
+        try {
+            process = Runtime.getRuntime().exec("sh");
+            dos = new DataOutputStream(process.getOutputStream());
+            dos.write(command.getBytes());
+            dos.writeBytes("\n");
+            dos.flush();
+            dos.writeBytes("exit\n");
+            dos.flush();
+
+            status = process.waitFor();
+
+            errorMsg = new StringBuilder();
+            successReader = new BufferedReader(new InputStreamReader(
+                    process.getInputStream()));
+            errorReader = new BufferedReader(new InputStreamReader(
+                    process.getErrorStream()));
+            String lineStr;
+            while ((lineStr = successReader.readLine()) != null) {
+                results.add(lineStr);
+            }
+            while ((lineStr = errorReader.readLine()) != null) {
+                errorMsg.append(lineStr);
+                results.add(lineStr);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (dos != null) {
+                    dos.close();
+                }
+                if (successReader != null) {
+                    successReader.close();
+                }
+                if (errorReader != null) {
+                    errorReader.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            if (process != null) {
+                process.destroy();
+            }
+        }
+        return results;
+    }
 }
