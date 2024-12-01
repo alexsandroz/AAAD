@@ -71,6 +71,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1527,7 +1528,12 @@ public class MainActivity extends AppCompatActivity  {
                     }
                     break;
                     case PackageInstaller.STATUS_SUCCESS:
-                        Toast.makeText(context, "Install succeeded!", Toast.LENGTH_SHORT).show();
+                        new AlertDialog.Builder(context)
+                                .setTitle("Install sucesses")
+                                .setMessage(result + ": " + message)
+                                .setPositiveButton(context.getString(android.R.string.ok), (dialog, which) -> dialog.dismiss())
+                                .create()
+                                .show();
                         break;
                     case PackageInstaller.STATUS_FAILURE:
                     case PackageInstaller.STATUS_FAILURE_ABORTED:
@@ -1557,32 +1563,34 @@ public class MainActivity extends AppCompatActivity  {
 
         Intent intent;
 
-        if (Build.VERSION.SDK_INT >= 33) {
-            installByPackageInstaller(file);
-            //installByShellScriptPm(file);
-        } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                installByPackageInstaller(file);
-//                intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-//                intent.setData(getUri(file));
-//                intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-            } else {
-                intent = new Intent(Intent.ACTION_VIEW);
-                intent.setDataAndTypeAndNormalize(Uri.fromFile(file), "application/vnd.android.package-archive");
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            }
+//        installByActionIntent(file);
+        installByPackageInstaller(file);
+//        installByShellScriptPm(file);
 
-//            intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-//            intent.putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, "com.android.vending");
-//            getApplicationContext().startActivity(intent);
+    }
+
+    private void installByActionIntent(File file) {
+        Intent intent;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            intent.setData(getUri(file));
+            intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        } else {
+            intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndTypeAndNormalize(Uri.fromFile(file), "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         }
 
+        intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+        intent.putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, "com.android.vending");
+        getApplicationContext().startActivity(intent);
     }
 
     private void installByShellScriptPm(File file) {
         Context context = MainActivity.this;
         try {
-            List<String> ret = runShellCommand("pm install -i \"com.android.vending\" " + file.getPath());
+            String cmd = "pm install -i \"com.android.vending\" " + file.getPath();
+            List<String> ret = runShellCommand(cmd);
             Toast.makeText(this, ret.toString(), Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             new AlertDialog.Builder(context)
@@ -1599,36 +1607,24 @@ public class MainActivity extends AppCompatActivity  {
         PackageInstaller.Session session = null;
         Context context = MainActivity.this;
         try {
-
-//            if(!Settings.System.canWrite(this)){
-//                intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
-//                intent.setData(Uri.parse("package:" + this.getPackageName()));
-//                startActivity(intent);
-//                return;
-//            }
-
             int flags = 0;
-            PackageInstaller packageInstaller = context.getPackageManager().getPackageInstaller();
+            PackageInstaller packageInstaller = getPackageManager().getPackageInstaller();
             PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
                     PackageInstaller.SessionParams.MODE_FULL_INSTALL);
             if (Build.VERSION.SDK_INT >= 34) {
                 flags = PendingIntent.FLAG_MUTABLE
                         | PendingIntent.FLAG_CANCEL_CURRENT
                         | PendingIntent.FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT;
-                //params.setAppPackageName("me.aap.fermata.auto.dear.google.why");
-                params.setInstallReason(PackageManager.INSTALL_REASON_USER);
-                params.setPackageSource(PackageInstaller.PACKAGE_SOURCE_STORE);
-                params.setOriginatingUid(10186); //buscar uid of com.android.vending
-                params.setOriginatingUri(Uri.parse("https://play.google.com/store/apps/details?id=com.android.vending"));
-//                params.setInstallerPackageName("com.android.vending");
 
+//                getPackageManager().setInstallerPackageName("sksa.aa.customapps","com.android.vending");
+//                params.setInstallerPackageName("com.android.vending");
+                params.setPackageSource(PackageInstaller.PACKAGE_SOURCE_STORE);
             } else {
                 flags = PendingIntent.FLAG_MUTABLE;
             }
             int sessionId = packageInstaller.createSession(params);
             session = packageInstaller.openSession(sessionId);
-            //getPackageManager().setInstallerPackageName("me.aap.fermata.auto.dear.google.why","com.android.vending");
-            //getPackageManager().getInstalledPackages(0x00400000)
+            //file = new File("/data/local/tmp/base.apk");
             InputStream in = new FileInputStream(file);
             OutputStream out = session.openWrite("package", 0, -1);
             byte[] buffer = new byte[65536];
